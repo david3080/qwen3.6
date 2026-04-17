@@ -37,10 +37,23 @@ def start_llama_server():
         cmd += ["--mmproj", MMPROJ_PATH]
 
     print(f"Starting llama-server: {' '.join(cmd)}", flush=True)
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
-    # 起動待ち（最大180秒）
-    for _ in range(180):
+    # 起動待ち（最大600秒）
+    for i in range(600):
+        # 出力をリアルタイムに表示
+        if proc.stdout:
+            import select
+            if select.select([proc.stdout], [], [], 0)[0]:
+                line = proc.stdout.readline()
+                if line:
+                    print(f"[llama] {line.rstrip()}", flush=True)
+
+        if proc.poll() is not None:
+            remaining = proc.stdout.read() if proc.stdout else ""
+            print(f"[llama] exited with code {proc.returncode}:\n{remaining}", flush=True)
+            raise RuntimeError(f"llama-server exited with code {proc.returncode}")
+
         try:
             r = requests.get(f"{LLAMA_URL}/health", timeout=2)
             if r.status_code == 200:
@@ -48,9 +61,11 @@ def start_llama_server():
                 return proc
         except Exception:
             pass
+        if i % 30 == 0:
+            print(f"Waiting for llama-server... {i}s", flush=True)
         time.sleep(1)
 
-    raise RuntimeError("llama-server failed to start within 180 seconds")
+    raise RuntimeError("llama-server failed to start within 600 seconds")
 
 
 # ワーカー起動時に一度だけ実行
