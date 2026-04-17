@@ -31,8 +31,8 @@ def start_llama_server():
         "--port", str(LLAMA_PORT),
         "--host", "127.0.0.1",
         "--parallel", "1",
-        "--cache-type-k", "q4_0",
-        "--cache-type-v", "q4_0",
+        "--cache-type-k", "turbo4",
+        "--cache-type-v", "turbo4",
         "-ngl", "99",
     ]
     # mmproj が存在する場合のみ vision を有効化
