@@ -6,4 +6,5 @@ RUN apt-get update && apt-get install -y python3 python3-pip && \
 
 COPY handler.py /handler.py
 
+ENTRYPOINT []
 CMD ["python3", "-u", "/handler.py"]
