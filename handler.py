@@ -53,11 +53,26 @@ def start_llama_server():
     raise RuntimeError("llama-server failed to start within 180 seconds")
 
 
+import glob as _glob
+import json as _json
+
+def _find_model_files():
+    """モデルファイルが見つからない場合、ボリューム内のファイルリストを返す"""
+    if not os.path.exists(MODEL_PATH):
+        files = _glob.glob("/runpod-volume/**", recursive=True)
+        return _json.dumps({"error": f"MODEL_PATH not found: {MODEL_PATH}", "files": sorted(files)[:50]})
+    return None
+
+_model_error = _find_model_files()
+
 # ワーカー起動時に一度だけ実行
-_server_proc = start_llama_server()
+_server_proc = None if _model_error else start_llama_server()
 
 
 def handler(job):
+    if _model_error:
+        return _json.loads(_model_error)
+
     job_input = job.get("input", {})
 
     # streaming 判定
