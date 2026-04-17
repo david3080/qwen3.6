@@ -28,8 +28,6 @@ def start_llama_server():
         "--parallel", "1",
         "--cache-type-k", "q4_0",
         "--cache-type-v", "q4_0",
-        "--reasoning",
-        "--reasoning-format", "deepseek",
         "-ngl", "99",
     ]
     # mmproj が存在する場合のみ vision を有効化
