@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.4-devel-ubuntu22.04 AS builder
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04 AS builder
 
 RUN apt-get update && apt-get install -y \
     cmake ninja-build git build-essential libcurl4-openssl-dev \
@@ -14,7 +14,7 @@ RUN cd /llama.cpp && \
       -GNinja && \
     cmake --build build --target llama-server -j$(nproc)
 
-FROM nvidia/cuda:12.4-runtime-ubuntu22.04
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 RUN apt-get update && apt-get install -y \
     python3 python3-pip libgomp1 libcurl4 \
