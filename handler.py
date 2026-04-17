@@ -11,6 +11,11 @@ import time
 import requests
 import runpod
 
+print("=== handler.py starting ===", flush=True)
+import shutil
+print(f"llama-server binary: {shutil.which('llama-server')}", flush=True)
+print(f"GPU check: {os.popen('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>&1').read().strip()}", flush=True)
+
 MODEL_PATH = os.environ.get("MODEL_PATH", "/runpod-volume/model.gguf")
 MMPROJ_PATH = os.environ.get("MMPROJ_PATH", "/runpod-volume/mmproj.gguf")
 CTX_SIZE = os.environ.get("CTX_SIZE", "8192")
