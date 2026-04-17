@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qwen3.6 Chat</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f5; height: 100dvh; display: flex; flex-direction: column; }
+  #header { background: #1a1a2e; color: white; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
+  #header h1 { font-size: 16px; }
+  #header button { background: none; border: 1px solid #555; color: #aaa; padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+  #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 85%; padding: 10px 14px; border-radius: 16px; line-height: 1.5; font-size: 15px; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { background: #1a1a2e; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg.assistant { background: white; color: #222; align-self: flex-start; border-bottom-left-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .msg.system { background: #fff3cd; color: #856404; align-self: center; font-size: 13px; border-radius: 8px; }
+  .thinking { color: #888; font-style: italic; }
+  #inputArea { padding: 12px; background: white; border-top: 1px solid #ddd; display: flex; gap: 8px; }
+  #inputArea textarea { flex: 1; border: 1px solid #ddd; border-radius: 20px; padding: 10px 16px; font-size: 15px; resize: none; outline: none; font-family: inherit; max-height: 120px; }
+  #inputArea button { background: #1a1a2e; color: white; border: none; border-radius: 50%; width: 44px; height: 44px; font-size: 18px; cursor: pointer; flex-shrink: 0; }
+  #inputArea button:disabled { background: #ccc; }
+
+  /* 設定モーダル */
+  #modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+  #modal.open { display: flex; }
+  #modalBox { background: white; border-radius: 12px; padding: 24px; width: 90%; max-width: 400px; }
+  #modalBox h2 { font-size: 16px; margin-bottom: 16px; }
+  #modalBox label { font-size: 13px; color: #555; display: block; margin-bottom: 4px; margin-top: 12px; }
+  #modalBox input { width: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 14px; outline: none; }
+  #modalBox .buttons { display: flex; gap: 8px; margin-top: 20px; }
+  #modalBox .buttons button { flex: 1; padding: 10px; border-radius: 8px; border: none; font-size: 14px; cursor: pointer; }
+  #modalBox .buttons .save { background: #1a1a2e; color: white; }
+  #modalBox .buttons .cancel { background: #eee; color: #333; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>Qwen3.6 Chat</h1>
+  <button onclick="openSettings()">設定</button>
+</div>
+
+<div id="messages"></div>
+
+<div id="inputArea">
+  <textarea id="input" placeholder="メッセージを入力..." rows="1"
+    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send()}"
+    oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+  <button id="sendBtn" onclick="send()">↑</button>
+</div>
+
+<div id="modal">
+  <div id="modalBox">
+    <h2>接続設定</h2>
+    <label>RunPod API Key</label>
+    <input id="cfgKey" type="password" placeholder="rpa_...">
+    <label>RunPod Endpoint ID</label>
+    <input id="cfgEndpoint" type="text" placeholder="xxxxxxxxxx">
+    <div class="buttons">
+      <button class="cancel" onclick="closeSettings()">キャンセル</button>
+      <button class="save" onclick="saveSettings()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SYSTEM_PROMPT = "あなたは基本情報技術者試験の専門家です。日本語で簡潔に回答してください。";
+
+let history = [];
+let apiKey = localStorage.getItem("runpod_api_key") || "";
+let endpointId = localStorage.getItem("runpod_endpoint_id") || "";
+let busy = false;
+
+function cfg() { return { apiKey, endpointId }; }
+
+function openSettings() {
+  document.getElementById("cfgKey").value = apiKey;
+  document.getElementById("cfgEndpoint").value = endpointId;
+  document.getElementById("modal").classList.add("open");
+}
+function closeSettings() { document.getElementById("modal").classList.remove("open"); }
+function saveSettings() {
+  apiKey = document.getElementById("cfgKey").value.trim();
+  endpointId = document.getElementById("cfgEndpoint").value.trim();
+  localStorage.setItem("runpod_api_key", apiKey);
+  localStorage.setItem("runpod_endpoint_id", endpointId);
+  closeSettings();
+}
+
+function addMsg(role, text) {
+  const div = document.createElement("div");
+  div.className = `msg ${role}`;
+  div.textContent = text;
+  document.getElementById("messages").appendChild(div);
+  div.scrollIntoView({ behavior: "smooth" });
+  return div;
+}
+
+function systemMsg(text) { addMsg("system", text); }
+
+async function send() {
+  if (busy) return;
+  if (!apiKey || !endpointId) { openSettings(); return; }
+
+  const input = document.getElementById("input");
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = "";
+  input.style.height = "auto";
+  addMsg("user", text);
+  history.push({ role: "user", content: text });
+
+  busy = true;
+  document.getElementById("sendBtn").disabled = true;
+
+  const loadingDiv = addMsg("assistant", "");
+  loadingDiv.innerHTML = '<span class="thinking">考え中... (初回は数分かかる場合があります)</span>';
+
+  const messages = [{ role: "system", content: SYSTEM_PROMPT }, ...history];
+
+  try {
+    // RunPod runsync に送信（フォーマット変換をここで実施）
+    const url = `https://api.runpod.ai/v2/${endpointId}/runsync`;
+    const payload = {
+      input: {
+        model: "qwen",
+        messages,
+        max_tokens: 2048,
+        temperature: 0.7,
+        stream: false,
+      }
+    };
+
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const data = await resp.json();
+
+    // RunPod output から OpenAI レスポンスを取り出す
+    const output = data.output ?? data;
+    const content = output?.choices?.[0]?.message?.content ?? JSON.stringify(output);
+
+    loadingDiv.textContent = content;
+    history.push({ role: "assistant", content });
+
+  } catch (e) {
+    loadingDiv.classList.add("system");
+    loadingDiv.textContent = `エラー: ${e.message}`;
+  }
+
+  busy = false;
+  document.getElementById("sendBtn").disabled = false;
+}
+
+// 初回設定チェック
+window.onload = () => {
+  if (!apiKey || !endpointId) {
+    systemMsg("設定ボタンからRunPod APIキーとEndpoint IDを入力してください");
+    openSettings();
+  } else {
+    systemMsg("接続済み。最初のメッセージ送信時にモデルが起動します（初回のみ約3分かかります）");
+  }
+};
+</script>
+</body>
+</html>
