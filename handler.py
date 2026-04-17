@@ -25,7 +25,7 @@ LLAMA_URL = f"http://127.0.0.1:{LLAMA_PORT}"
 
 def start_llama_server():
     cmd = [
-        "llama-server",
+        "/app/llama-server",
         "--model", MODEL_PATH,
         "--ctx-size", CTX_SIZE,
         "--port", str(LLAMA_PORT),
