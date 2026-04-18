@@ -7,9 +7,13 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip3 install --no-cache-dir runpod requests
 
-RUN git clone --depth 1 https://github.com/TheTom/llama-cpp-turboquant /llama.cpp && \
+RUN mkdir -p /app && \
+    ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1 && \
+    git clone --depth 1 https://github.com/TheTom/llama-cpp-turboquant /llama.cpp && \
     cd /llama.cpp && \
-    cmake -B build -DGGML_CUDA=ON -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON -GNinja && \
+    cmake -B build -DGGML_CUDA=ON -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON -GNinja \
+        -DCMAKE_EXE_LINKER_FLAGS="-L/usr/local/cuda/lib64/stubs" \
+        -DCMAKE_SHARED_LINKER_FLAGS="-L/usr/local/cuda/lib64/stubs" && \
     cmake --build build --target llama-server -j$(nproc) && \
     cp build/bin/llama-server /app/llama-server && \
     rm -rf /llama.cpp
