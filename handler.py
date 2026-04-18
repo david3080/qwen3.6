@@ -10,7 +10,7 @@ import shutil
 print(f"llama-server binary: {shutil.which('llama-server')}", flush=True)
 print(f"GPU check: {os.popen('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>&1').read().strip()}", flush=True)
 
-MODEL_PATH = os.environ.get("MODEL_PATH", "/tmp/model.gguf")
+MODEL_PATH = os.environ.get("MODEL_PATH", "/workspace/model.gguf")
 MODEL_URL = os.environ.get("MODEL_URL", "https://huggingface.co/bartowski/Qwen_Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen_Qwen3.6-35B-A3B-Q4_K_M.gguf")
 MMPROJ_PATH = os.environ.get("MMPROJ_PATH", "")
 CTX_SIZE = os.environ.get("CTX_SIZE", "8192")
@@ -24,7 +24,7 @@ def ensure_model():
         return
     os.makedirs(os.path.dirname(MODEL_PATH) or "/tmp", exist_ok=True)
     print(f"Downloading model from {MODEL_URL} ...", flush=True)
-    with requests.get(MODEL_URL, stream=True, timeout=30) as r:
+    with requests.get(MODEL_URL, stream=True, timeout=(30, 300)) as r:
         r.raise_for_status()
         total = int(r.headers.get("content-length", 0))
         downloaded = 0
