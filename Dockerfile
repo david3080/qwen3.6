@@ -15,6 +15,8 @@ RUN mkdir -p /app && \
         -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON -GNinja && \
     cmake --build build --target llama-server -j$(nproc) && \
     cp build/bin/llama-server /app/llama-server && \
+    find build -name "*.so*" -exec cp {} /usr/local/lib/ \; && \
+    ldconfig && \
     rm -rf /llama.cpp
 
 COPY handler.py /handler.py
