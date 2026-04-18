@@ -46,9 +46,8 @@ def start_llama_server():
         "--port", str(LLAMA_PORT),
         "--host", "127.0.0.1",
         "--parallel", "1",
-        "--cache-type-k", "turbo4",
-        "--cache-type-v", "turbo4",
         "-ngl", "99",
+        "--verbose",
     ]
     if MMPROJ_PATH and os.path.exists(MMPROJ_PATH):
         cmd += ["--mmproj", MMPROJ_PATH]
