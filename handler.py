@@ -14,7 +14,6 @@ MODEL_PATH = os.environ.get("MODEL_PATH", "/workspace/model.gguf")
 MODEL_URL = os.environ.get("MODEL_URL", "https://huggingface.co/bartowski/Qwen_Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen_Qwen3.6-35B-A3B-Q4_K_M.gguf")
 MMPROJ_PATH = os.environ.get("MMPROJ_PATH", "")
 CTX_SIZE = os.environ.get("CTX_SIZE", "8192")
-PARALLEL = int(os.environ.get("PARALLEL", "1"))
 LLAMA_PORT = 8080
 LLAMA_URL = f"http://127.0.0.1:{LLAMA_PORT}"
 
@@ -46,7 +45,7 @@ def start_llama_server():
         "--ctx-size", CTX_SIZE,
         "--port", str(LLAMA_PORT),
         "--host", "127.0.0.1",
-        "--parallel", str(PARALLEL),
+        "--parallel", "1",
         "--cache-type-k", "turbo4",
         "--cache-type-v", "turbo4",
         "-ngl", "99",
@@ -114,12 +113,7 @@ def handler(job):
     return generate()
 
 
-def concurrency_modifier(current_concurrency):
-    return PARALLEL
-
-
 runpod.serverless.start({
     "handler": handler,
     "return_aggregate_stream": True,
-    "concurrency_modifier": concurrency_modifier,
 })
