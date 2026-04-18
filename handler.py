@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""
-RunPod Serverless handler for llama-server (OpenAI-compatible).
-- 起動時に llama-server を subprocess で起動
-- RunPod の input をそのまま llama-server の /v1/chat/completions に転送
-- streaming 対応（generator で逐次返却）
-"""
 import os
 import subprocess
 import time
@@ -16,14 +10,35 @@ import shutil
 print(f"llama-server binary: {shutil.which('llama-server')}", flush=True)
 print(f"GPU check: {os.popen('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>&1').read().strip()}", flush=True)
 
-MODEL_PATH = os.environ.get("MODEL_PATH", "/runpod-volume/model.gguf")
-MMPROJ_PATH = os.environ.get("MMPROJ_PATH", "/runpod-volume/mmproj.gguf")
+MODEL_PATH = os.environ.get("MODEL_PATH", "/tmp/model.gguf")
+MODEL_URL = os.environ.get("MODEL_URL", "https://huggingface.co/bartowski/Qwen_Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen_Qwen3.6-35B-A3B-Q4_K_M.gguf")
+MMPROJ_PATH = os.environ.get("MMPROJ_PATH", "")
 CTX_SIZE = os.environ.get("CTX_SIZE", "8192")
 LLAMA_PORT = 8080
 LLAMA_URL = f"http://127.0.0.1:{LLAMA_PORT}"
 
 
+def ensure_model():
+    if os.path.exists(MODEL_PATH):
+        print(f"Model found at {MODEL_PATH}", flush=True)
+        return
+    os.makedirs(os.path.dirname(MODEL_PATH) or "/tmp", exist_ok=True)
+    print(f"Downloading model from {MODEL_URL} ...", flush=True)
+    with requests.get(MODEL_URL, stream=True, timeout=30) as r:
+        r.raise_for_status()
+        total = int(r.headers.get("content-length", 0))
+        downloaded = 0
+        with open(MODEL_PATH, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8 * 1024 * 1024):
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total and downloaded % (1024 * 1024 * 1024) < 8 * 1024 * 1024:
+                    print(f"Download: {downloaded * 100 // total}% ({downloaded // 1024 // 1024}MB / {total // 1024 // 1024}MB)", flush=True)
+    print("Model download complete", flush=True)
+
+
 def start_llama_server():
+    ensure_model()
     cmd = [
         "/app/llama-server",
         "--model", MODEL_PATH,
@@ -35,16 +50,13 @@ def start_llama_server():
         "--cache-type-v", "turbo4",
         "-ngl", "99",
     ]
-    # mmproj が存在する場合のみ vision を有効化
-    if os.path.exists(MMPROJ_PATH):
+    if MMPROJ_PATH and os.path.exists(MMPROJ_PATH):
         cmd += ["--mmproj", MMPROJ_PATH]
 
     print(f"Starting llama-server: {' '.join(cmd)}", flush=True)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
-    # 起動待ち（最大600秒）
     for i in range(600):
-        # 出力をリアルタイムに表示
         if proc.stdout:
             import select
             if select.select([proc.stdout], [], [], 0)[0]:
@@ -71,16 +83,12 @@ def start_llama_server():
     raise RuntimeError("llama-server failed to start within 600 seconds")
 
 
-# ワーカー起動時に一度だけ実行
 _server_proc = start_llama_server()
 
 
 def handler(job):
     job_input = job.get("input", {})
-
-    # streaming 判定
     stream = job_input.get("stream", False)
-
     try:
         resp = requests.post(
             f"{LLAMA_URL}/v1/chat/completions",
@@ -95,13 +103,12 @@ def handler(job):
     if not stream:
         return resp.json()
 
-    # streaming: SSE チャンクを generator で返す
     def generate():
         for line in resp.iter_lines():
             if line:
                 decoded = line.decode("utf-8")
                 if decoded.startswith("data: "):
-                    yield decoded[6:]  # "data: " を除去
+                    yield decoded[6:]
 
     return generate()
 
