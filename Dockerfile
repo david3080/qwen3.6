@@ -7,13 +7,12 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip3 install --no-cache-dir runpod requests
 
-ENV LIBRARY_PATH=/usr/local/cuda/lib64/stubs
-
 RUN mkdir -p /app && \
-    ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1 && \
     git clone --depth 1 https://github.com/TheTom/llama-cpp-turboquant /llama.cpp && \
     cd /llama.cpp && \
-    cmake -B build -DGGML_CUDA=ON -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON -GNinja && \
+    cmake -B build -DGGML_CUDA=ON -DGGML_CUDA_NO_VMM=ON \
+        -DCMAKE_CUDA_ARCHITECTURES=89 \
+        -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON -GNinja && \
     cmake --build build --target llama-server -j$(nproc) && \
     cp build/bin/llama-server /app/llama-server && \
     rm -rf /llama.cpp
