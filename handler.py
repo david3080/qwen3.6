@@ -13,29 +13,39 @@ print(f"GPU check: {os.popen('nvidia-smi --query-gpu=name,memory.total --format=
 MODEL_PATH = os.environ.get("MODEL_PATH", "/workspace/model.gguf")
 MODEL_URL = os.environ.get("MODEL_URL", "https://huggingface.co/bartowski/Qwen_Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen_Qwen3.6-35B-A3B-Q4_K_M.gguf")
 MMPROJ_PATH = os.environ.get("MMPROJ_PATH", "")
+MMPROJ_URL = os.environ.get("MMPROJ_URL", "https://huggingface.co/bartowski/Qwen_Qwen3.6-35B-A3B-GGUF/resolve/main/mmproj-Qwen_Qwen3.6-35B-A3B-f16.gguf")
 CTX_SIZE = os.environ.get("CTX_SIZE", "8192")
 PARALLEL = int(os.environ.get("PARALLEL", "1"))
 LLAMA_PORT = 8080
 LLAMA_URL = f"http://127.0.0.1:{LLAMA_PORT}"
 
 
-def ensure_model():
-    if os.path.exists(MODEL_PATH):
-        print(f"Model found at {MODEL_PATH}", flush=True)
-        return
-    os.makedirs(os.path.dirname(MODEL_PATH) or "/tmp", exist_ok=True)
-    print(f"Downloading model from {MODEL_URL} ...", flush=True)
-    with requests.get(MODEL_URL, stream=True, timeout=(30, 300)) as r:
+def download_file(url, path, label):
+    os.makedirs(os.path.dirname(path) or "/tmp", exist_ok=True)
+    print(f"Downloading {label} from {url} ...", flush=True)
+    with requests.get(url, stream=True, timeout=(30, 300)) as r:
         r.raise_for_status()
         total = int(r.headers.get("content-length", 0))
         downloaded = 0
-        with open(MODEL_PATH, "wb") as f:
+        with open(path, "wb") as f:
             for chunk in r.iter_content(chunk_size=8 * 1024 * 1024):
                 f.write(chunk)
                 downloaded += len(chunk)
-                if total and downloaded % (1024 * 1024 * 1024) < 8 * 1024 * 1024:
-                    print(f"Download: {downloaded * 100 // total}% ({downloaded // 1024 // 1024}MB / {total // 1024 // 1024}MB)", flush=True)
-    print("Model download complete", flush=True)
+                if total and downloaded % (512 * 1024 * 1024) < 8 * 1024 * 1024:
+                    print(f"{label}: {downloaded * 100 // total}% ({downloaded // 1024 // 1024}MB / {total // 1024 // 1024}MB)", flush=True)
+    print(f"{label} download complete", flush=True)
+
+
+def ensure_model():
+    if not os.path.exists(MODEL_PATH):
+        download_file(MODEL_URL, MODEL_PATH, "model")
+    else:
+        print(f"Model found at {MODEL_PATH}", flush=True)
+
+    if MMPROJ_PATH and not os.path.exists(MMPROJ_PATH):
+        download_file(MMPROJ_URL, MMPROJ_PATH, "mmproj")
+    elif MMPROJ_PATH:
+        print(f"mmproj found at {MMPROJ_PATH}", flush=True)
 
 
 def start_llama_server():
