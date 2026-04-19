@@ -87,31 +87,33 @@ def start_llama_server():
 _server_proc = start_llama_server()
 
 
-def handler(job):
-    # handlerをジェネレーター関数にすることでRunPod SDKが正しくストリーミングを処理する
+import aiohttp as _aiohttp
+
+
+async def handler(job):
     job_input = job.get("input", {})
     do_stream = job_input.get("stream", False)
-    try:
-        resp = requests.post(
-            f"{LLAMA_URL}/v1/chat/completions",
-            json=job_input,
-            stream=do_stream,
-            timeout=300,
-        )
-        resp.raise_for_status()
-    except Exception as e:
-        yield {"error": str(e)}
-        return
 
-    if not do_stream:
-        yield resp.json()
-        return
+    async with _aiohttp.ClientSession() as session:
+        try:
+            async with session.post(
+                f"{LLAMA_URL}/v1/chat/completions",
+                json=job_input,
+                timeout=_aiohttp.ClientTimeout(total=300),
+            ) as resp:
+                resp.raise_for_status()
 
-    for line in resp.iter_lines():
-        if line:
-            decoded = line.decode("utf-8")
-            if decoded.startswith("data: ") and decoded != "data: [DONE]":
-                yield decoded[6:]
+                if not do_stream:
+                    yield await resp.json()
+                    return
+
+                async for raw_line in resp.content:
+                    line = raw_line.decode("utf-8").rstrip()
+                    if line.startswith("data: ") and line != "data: [DONE]":
+                        yield line[6:]
+
+        except Exception as e:
+            yield {"error": str(e)}
 
 
 def concurrency_modifier(current_concurrency):

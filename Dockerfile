@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y \
     build-essential libcurl4-openssl-dev libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --no-cache-dir runpod requests
+RUN pip3 install --no-cache-dir runpod requests aiohttp
 
 RUN mkdir -p /app && \
     git clone --depth 1 https://github.com/TheTom/llama-cpp-turboquant /llama.cpp && \
