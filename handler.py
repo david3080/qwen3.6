@@ -88,30 +88,30 @@ _server_proc = start_llama_server()
 
 
 def handler(job):
+    # handlerをジェネレーター関数にすることでRunPod SDKが正しくストリーミングを処理する
     job_input = job.get("input", {})
-    stream = job_input.get("stream", False)
+    do_stream = job_input.get("stream", False)
     try:
         resp = requests.post(
             f"{LLAMA_URL}/v1/chat/completions",
             json=job_input,
-            stream=stream,
+            stream=do_stream,
             timeout=300,
         )
         resp.raise_for_status()
     except Exception as e:
-        return {"error": str(e)}
+        yield {"error": str(e)}
+        return
 
-    if not stream:
-        return resp.json()
+    if not do_stream:
+        yield resp.json()
+        return
 
-    def generate():
-        for line in resp.iter_lines():
-            if line:
-                decoded = line.decode("utf-8")
-                if decoded.startswith("data: "):
-                    yield decoded[6:]
-
-    return generate()
+    for line in resp.iter_lines():
+        if line:
+            decoded = line.decode("utf-8")
+            if decoded.startswith("data: ") and decoded != "data: [DONE]":
+                yield decoded[6:]
 
 
 def concurrency_modifier(current_concurrency):
