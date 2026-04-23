@@ -60,7 +60,6 @@ def start_llama_server():
         "--cache-type-k", "turbo4",
         "--cache-type-v", "turbo4",
         "-ngl", "99",
-        "--jinja",
     ]
     if MMPROJ_PATH and os.path.exists(MMPROJ_PATH):
         cmd += ["--mmproj", MMPROJ_PATH]
